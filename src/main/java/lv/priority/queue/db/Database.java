@@ -29,15 +29,23 @@ public class Database {
      * - objekta_vertiba
      */
     public void init() throws SQLException {
-        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
-            conn.setAutoCommit(false);
+    try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
+        conn.setAutoCommit(false);
+
+        // Enable FK support in SQLite
+        stmt.execute("PRAGMA foreign_keys = ON");
+
+        try {
+            // Create tables if they do not exist. Do NOT drop existing tables so persisted
+            // data remains intact across restarts. Schema migrations should be handled
+            // separately when needed.
 
             // ATRIBUTS
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS atributs (" +
                 "atributaID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "nosaukums VARCHAR(50) NOT NULL, " +
-                "koeficients FLOAT NOT NULL CHECK(koeficients >= 0 AND koeficients <= 1)" +
+                "nosaukums TEXT NOT NULL, " +
+                "koeficients REAL NOT NULL CHECK(koeficients >= 0 AND koeficients <= 1)" +
                 ")"
             );
 
@@ -45,9 +53,9 @@ public class Database {
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS lietotajs (" +
                 "lietotajaID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "lietotajvards VARCHAR(30) NOT NULL UNIQUE, " +
-                "parole VARCHAR(64) NOT NULL, " +
-                "loma VARCHAR(20) NOT NULL" +
+                "lietotajvards TEXT NOT NULL UNIQUE, " +
+                "parole TEXT NOT NULL, " +
+                "loma TEXT NOT NULL" +
                 ")"
             );
 
@@ -55,28 +63,41 @@ public class Database {
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS objekts (" +
                 "objektaID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "nosaukums VARCHAR(100) NOT NULL, " +
-                "pievienots_laiks DATETIME DEFAULT CURRENT_TIMESTAMP, " +
-                "prioritates_svars FLOAT, " +
-                "statuss VARCHAR(20)" +
+                "nosaukums TEXT NOT NULL, " +
+                "pievienots_laiks TEXT DEFAULT CURRENT_TIMESTAMP, " +
+                "prioritates_svars REAL, " +
+                "statuss TEXT, " +
+                "FK_lietotajsID INTEGER, " +
+                "FOREIGN KEY(FK_lietotajsID) REFERENCES lietotajs(lietotajaID) ON DELETE SET NULL" +
                 ")"
             );
 
-            // OBJEKTA_VERTIBA
+            // OBJEKTA_VERTIBA (presence-only mapping: FK_objektaID <-> FK_atributaID)
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS objekta_vertiba (" +
                 "vertibasID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "objektaID INTEGER NOT NULL, " +
-                "atributaID INTEGER NOT NULL, " +
-                "vertiba FLOAT NOT NULL, " +
-                "FOREIGN KEY(objektaID) REFERENCES objekts(objektaID) ON DELETE CASCADE, " +
-                "FOREIGN KEY(atributaID) REFERENCES atributs(atributaID) ON DELETE CASCADE" +
+                "FK_objektaID INTEGER NOT NULL, " +
+                "FK_atributaID INTEGER NOT NULL, " +
+                "FOREIGN KEY(FK_objektaID) REFERENCES objekts(objektaID) ON DELETE CASCADE, " +
+                "FOREIGN KEY(FK_atributaID) REFERENCES atributs(atributaID) ON DELETE CASCADE" +
                 ")"
             );
 
+            // Optional indexes (recommended)
+            stmt.executeUpdate(
+                "CREATE INDEX IF NOT EXISTS idx_objekta_vertiba_objekts ON objekta_vertiba(FK_objektaID)"
+            );
+            stmt.executeUpdate(
+                "CREATE INDEX IF NOT EXISTS idx_objekta_vertiba_atributs ON objekta_vertiba(FK_atributaID)"
+            );
+
             conn.commit();
+        } catch (SQLException e) {
+            conn.rollback();
+            throw e;
         }
     }
+}
 
     // Simple demo to create tables
     public static void main(String[] args) {

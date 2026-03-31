@@ -1,36 +1,37 @@
 package lv.priority.queue;
 
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Map;
 
 public class Item {
     private String name;
-    private Map<String, Double> attributes; // attribute name -> value (0.0 - 1.0)
+    private Set<String> attributes; // attribute presence set
 
     public Item(String name) {
         this.name = name;
-        this.attributes = new HashMap<>();
+        this.attributes = new HashSet<>();
     }
 
-    public Item(String name, Map<String, Double> attributes) {
+    public Item(String name, Set<String> attributes) {
         this.name = name;
-        this.attributes = new HashMap<>(attributes);
+        this.attributes = new HashSet<>(attributes);
     }
 
     public String getName() {
         return name;
     }
 
-    public Map<String, Double> getAttributes() {
+    public Set<String> getAttributes() {
         return attributes;
     }
 
-    public void setAttribute(String attrName, double value) {
-        attributes.put(attrName, value);
+    public void setAttribute(String attrName) {
+        attributes.add(attrName);
     }
 
-    public Double getAttributeValue(String attrName) {
-        return attributes.getOrDefault(attrName, 0.0);
+    public boolean hasAttribute(String attrName) {
+        return attributes.contains(attrName);
     }
 
     // Compute a combined score given attribute importance weights.
@@ -38,14 +39,12 @@ public class Item {
     // so attribute values still contribute by default.
     public double computeScore(Map<String, Double> importanceWeights) {
         double score = 0.0;
-        for (Map.Entry<String, Double> e : attributes.entrySet()) {
-            String attr = e.getKey();
-            double value = e.getValue();
+        for (String attr : attributes) {
             double weight = 1.0;
             if (importanceWeights != null) {
                 weight = importanceWeights.getOrDefault(attr, 1.0);
             }
-            score += value * weight;
+            score += weight; // presence contributes weight (binary)
         }
         return score;
     }

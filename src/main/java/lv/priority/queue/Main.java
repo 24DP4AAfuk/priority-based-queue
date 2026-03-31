@@ -9,12 +9,12 @@ public class Main {
             queue.setImportance("communication", 0.3);
 
             Item alice = new Item("Alice");
-            alice.setAttribute("experience", 0.9);
-            alice.setAttribute("communication", 0.6);
+            // presence-only attributes
+            alice.setAttribute("experience");
+            alice.setAttribute("communication");
 
             Item bob = new Item("Bob");
-            bob.setAttribute("experience", 0.6);
-            bob.setAttribute("communication", 0.9);
+            bob.setAttribute("communication");
 
             queue.addItem(alice);
             queue.addItem(bob);

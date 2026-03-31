@@ -75,10 +75,10 @@ public class Queue {
         if (it != null) rebuildQueue();
     }
 
-    public void updateItemAttribute(String itemName, String attribute, double value) {
+    public void updateItemAttribute(String itemName, String attribute) {
         Item it = itemsByName.get(itemName);
         if (it != null) {
-            it.setAttribute(attribute, value);
+            it.setAttribute(attribute);
             rebuildQueue();
         }
     }
