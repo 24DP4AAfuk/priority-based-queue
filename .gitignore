@@ -1,1 +1,6 @@
 target/
+/.mvn/
+*.db
+.idea/
+*.iml
+out/
