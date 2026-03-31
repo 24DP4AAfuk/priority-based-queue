@@ -1,3 +1,5 @@
+package lv.priority.queue;
+
 public class Attribute {
     private String name;
     private double weight; // importance from 0.0 to 1.0

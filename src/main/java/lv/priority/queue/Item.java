@@ -1,3 +1,5 @@
+package lv.priority.queue;
+
 import java.util.HashMap;
 import java.util.Map;
 
