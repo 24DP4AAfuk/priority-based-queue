@@ -32,10 +32,6 @@ public class Database {
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
             conn.setAutoCommit(false);
 
-            stmt.executeUpdate("DROP TABLE IF EXISTS attributes");
-            stmt.executeUpdate("DROP TABLE IF EXISTS items");
-            stmt.executeUpdate("DROP TABLE IF EXISTS importances");
-
             // ATRIBUTS
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS atributs (" +
