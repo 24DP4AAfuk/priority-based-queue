@@ -17,6 +17,8 @@ The app includes:
 - 📜 History of processed items.
 - 🔍 Search by ID or name.
 - 🖥️ A CLI for managing users/items, attributes, and priority weights.
+- 🔄 Automatic schema migration and data recovery from legacy database formats.
+- 📈 Automatic score recalculation and caching for consistent priority rankings.
 
 ## Tech Stack 🧰
 
@@ -105,29 +107,22 @@ mvn exec:java -Dexec.args="demo"
 
 ## Data Persistence 🧱
 
-- SQLite file: `priority.db`
-- Tables: atributs, lietotajs, objekts, objekta_vertiba, history, system_stats, last_processed
-
-## Notes 📝
-
-- Attributes have values 0.0-1.0, rules ASC/DESC.
-- Authentication required to access CLI.
-- Performance stats track uptime and reordering times.
-- History and last 10 processed items maintained.
-
-## Data Persistence 🧱
-
 - SQLite file: `priority.db` (created in the project root).
 - Schema is initialized automatically on startup.
 - Item-to-attribute assignments are stored with values.
 - User authentication, history, and stats persisted.
+- Automatic schema migration ensures compatibility with legacy database formats.
+- All object priority scores are recalculated at startup to guarantee consistency with current attribute definitions and rules.
 
 ## Notes 📝
 
 - `.gitignore` already excludes database files (`*.db`) and explicitly includes `priority.db`.
 - `target/` contains build output and should not be committed.
-- Attributes now have values and ASC/DESC rules for flexible priority calculation.
+- Attributes have values 0.0-1.0 and ASC/DESC rules for flexible priority calculation.
 - Authentication ensures role-based access control.
+- Database schema automatically migrates to handle legacy column names and data formats.
+- Priority scores are persisted in the database and recalculated at startup for consistency.
+- The `list` command displays scores from the persisted database for accurate priority rankings.
 
 ## License ⚖️
 
