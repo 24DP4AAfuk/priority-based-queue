@@ -139,6 +139,13 @@ public class Database {
                 "CREATE INDEX IF NOT EXISTS idx_history_time ON history(processed_time)"
             );
 
+            // Migration: Add rule column to atributs if not exists
+            try {
+                stmt.executeUpdate("ALTER TABLE atributs ADD COLUMN rule TEXT DEFAULT 'ASC'");
+            } catch (SQLException e) {
+                // Ignore if column already exists
+            }
+
             conn.commit();
         } catch (SQLException e) {
             conn.rollback();
