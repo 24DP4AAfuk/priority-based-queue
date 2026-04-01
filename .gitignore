@@ -1,6 +1,7 @@
 target/
 /.mvn/
 *.db
+priority.db
 .idea/
 *.iml
 out/
