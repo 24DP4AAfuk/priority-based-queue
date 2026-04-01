@@ -179,15 +179,18 @@ public class CLI {
                         try {
                             Map<String, Attribute> imps = dao.listAttributes();
                             Map<String, Item> items = dao.getAllItems();
+                            Map<String, Double> scores = dao.getStoredScores();
                             List<Item> ordered = new ArrayList<>(items.values());
-                            ordered.sort((a, b) -> Double.compare(b.computeScore(imps), a.computeScore(imps)));
+                            ordered.sort((a, b) -> Double.compare(
+                                    scores.getOrDefault(b.getName(), b.computeScore(imps)),
+                                    scores.getOrDefault(a.getName(), a.computeScore(imps))));
 
                             System.out.println("CURRENT PRIORITY QUEUE");
                             System.out.println("Position | Name          | Score     | Attributes");
                             System.out.println("---------|---------------|-----------|-----------");
                             int pos = 1;
                             for (Item it : ordered) {
-                                double s = it.computeScore(imps);
+                                double s = scores.getOrDefault(it.getName(), it.computeScore(imps));
                                 StringBuilder as = new StringBuilder();
                                 for (Map.Entry<String, Double> entry : it.getAttributes().entrySet()) {
                                     if (as.length() > 0) as.append(", ");

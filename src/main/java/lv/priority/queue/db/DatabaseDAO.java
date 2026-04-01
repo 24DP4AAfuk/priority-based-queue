@@ -228,6 +228,19 @@ public class DatabaseDAO {
         return out;
     }
 
+    // Returns persisted scores keyed by object name.
+    public Map<String, Double> getStoredScores() throws SQLException {
+        Map<String, Double> out = new HashMap<>();
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT nosaukums, COALESCE(prioritates_svars, 0) FROM objekts");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                out.put(rs.getString(1), rs.getDouble(2));
+            }
+        }
+        return out;
+    }
+
     // Returns a single object with attributes, or null when not found.
     public Item getItem(String name) throws SQLException {
         try (Connection conn = db.getConnection()) {

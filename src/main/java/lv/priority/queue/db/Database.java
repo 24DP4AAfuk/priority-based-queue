@@ -5,6 +5,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Database {
     private static final String DEFAULT_URL = "jdbc:sqlite:priority.db";
@@ -151,6 +153,9 @@ public class Database {
                 // Ignore if column already exists
             }
 
+            // Keep persisted scores aligned with current attribute values and rules.
+            recomputeAllPriorities(conn);
+
             conn.commit();
         } catch (SQLException e) {
             conn.rollback();
@@ -167,15 +172,60 @@ public class Database {
             }
         }
 
-        // Compatibility with older schemas that used 'value' as column name.
-        if (hasColumn(conn, "objekta_vertiba", "value")) {
+        // Compatibility with older schemas that used a different value column name.
+        List<String> legacyValueColumns = findLegacyValueColumns(conn);
+        for (String legacyColumn : legacyValueColumns) {
             try (Statement stmt = conn.createStatement()) {
-                stmt.executeUpdate("UPDATE objekta_vertiba SET vertiba = value WHERE vertiba IS NULL");
+                stmt.executeUpdate(
+                    "UPDATE objekta_vertiba SET vertiba = " + legacyColumn + " " +
+                    "WHERE (vertiba IS NULL OR vertiba = 0) AND " + legacyColumn + " IS NOT NULL"
+                );
             }
         }
+    }
 
+    private List<String> findLegacyValueColumns(Connection conn) throws SQLException {
+        List<String> candidates = new ArrayList<>();
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(objekta_vertiba)")) {
+            while (rs.next()) {
+                String name = rs.getString("name");
+                String type = rs.getString("type");
+                if (name == null) {
+                    continue;
+                }
+
+                String normalized = name.toLowerCase();
+                if ("vertiba".equals(normalized)
+                        || "vertibasid".equals(normalized)
+                        || "fk_objektaid".equals(normalized)
+                        || "fk_atributaid".equals(normalized)) {
+                    continue;
+                }
+
+                String normalizedType = type == null ? "" : type.toUpperCase();
+                boolean numeric = normalizedType.contains("REAL")
+                        || normalizedType.contains("NUM")
+                        || normalizedType.contains("DOUB")
+                        || normalizedType.contains("FLOA")
+                        || normalizedType.contains("INT");
+
+                if (numeric && (normalized.contains("vertib") || "value".equals(normalized))) {
+                    candidates.add(name);
+                }
+            }
+        }
+        return candidates;
+    }
+
+    private void recomputeAllPriorities(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("UPDATE objekta_vertiba SET vertiba = 0 WHERE vertiba IS NULL");
+            stmt.executeUpdate(
+                "UPDATE objekts SET prioritates_svars = COALESCE((" +
+                "SELECT SUM(CASE WHEN a.rule = 'DESC' THEN (1.0 - ov.vertiba) ELSE ov.vertiba END * a.koeficients) " +
+                "FROM objekta_vertiba ov JOIN atributs a ON a.atributaID = ov.FK_atributaID " +
+                "WHERE ov.FK_objektaID = objekts.objektaID), 0)"
+            );
         }
     }
 
