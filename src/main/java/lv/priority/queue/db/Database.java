@@ -2,6 +2,7 @@ package lv.priority.queue.db;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -139,6 +140,10 @@ public class Database {
                 "CREATE INDEX IF NOT EXISTS idx_history_time ON history(processed_time)"
             );
 
+            // Migration: old DB versions could store object-attribute value in a different column.
+            // Ensure objekta_vertiba always has the expected 'vertiba' column used by DAO queries.
+            migrateObjektaVertibaTable(conn);
+
             // Migration: Add rule column to atributs if not exists
             try {
                 stmt.executeUpdate("ALTER TABLE atributs ADD COLUMN rule TEXT DEFAULT 'ASC'");
@@ -153,6 +158,38 @@ public class Database {
         }
     }
 }
+
+    private void migrateObjektaVertibaTable(Connection conn) throws SQLException {
+        boolean hasVertiba = hasColumn(conn, "objekta_vertiba", "vertiba");
+        if (!hasVertiba) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate("ALTER TABLE objekta_vertiba ADD COLUMN vertiba REAL");
+            }
+        }
+
+        // Compatibility with older schemas that used 'value' as column name.
+        if (hasColumn(conn, "objekta_vertiba", "value")) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate("UPDATE objekta_vertiba SET vertiba = value WHERE vertiba IS NULL");
+            }
+        }
+
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("UPDATE objekta_vertiba SET vertiba = 0 WHERE vertiba IS NULL");
+        }
+    }
+
+    private boolean hasColumn(Connection conn, String tableName, String columnName) throws SQLException {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + tableName + ")")) {
+            while (rs.next()) {
+                if (columnName.equalsIgnoreCase(rs.getString("name"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     // Simple demo to create tables
     public static void main(String[] args) {
