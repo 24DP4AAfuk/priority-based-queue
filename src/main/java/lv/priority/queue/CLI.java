@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Scanner;
 
+// Interactive command-line shell for queue and DB operations.
 public class CLI {
     private final Queue queue;
     private final Scanner in = new Scanner(System.in);
@@ -28,6 +29,7 @@ public class CLI {
         }
     }
 
+    // Reads and executes commands until user exits.
     public void run() {
         System.out.println("Priority Queue CLI. Type 'help' for commands.");
         while (true) {

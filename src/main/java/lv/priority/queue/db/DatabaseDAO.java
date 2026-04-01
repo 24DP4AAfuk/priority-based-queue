@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
+// DAO that keeps queue state and SQLite persistence in sync.
 public class DatabaseDAO {
     private final Database db;
 
@@ -17,6 +18,7 @@ public class DatabaseDAO {
         this.db = db;
     }
 
+    // Loads all attributes and objects from DB into the in-memory queue.
     public void loadAll(Queue queue) throws SQLException {
         try (Connection conn = db.getConnection()) {
             // load attribute definitions (atributs: nosaukums -> koeficients)
@@ -51,6 +53,7 @@ public class DatabaseDAO {
         }
     }
 
+    // Creates the object row if it does not already exist.
     public void addItem(String name) throws SQLException {
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO objekts(nosaukums, prioritates_svars) VALUES(?, 0)") ) {
@@ -59,6 +62,7 @@ public class DatabaseDAO {
         }
     }
 
+    // Ensures item/attribute relationship exists and refreshes stored score.
     public void saveAttribute(String itemName, String attrName) throws SQLException {
         try (Connection conn = db.getConnection()) {
             conn.setAutoCommit(false);
@@ -113,6 +117,7 @@ public class DatabaseDAO {
         }
     }
 
+    // Upserts attribute weight and recomputes all object priorities in one pass.
     public void setImportance(String attrName, double weight) throws SQLException {
         try (Connection conn = db.getConnection()) {
             Integer aid = getAttributeId(conn, attrName);
@@ -137,6 +142,7 @@ public class DatabaseDAO {
         }
     }
 
+    // Removes an object and its attribute mappings.
     public void removeItem(String name) throws SQLException {
         try (Connection conn = db.getConnection()) {
             Integer id = getObjectId(conn, name);
@@ -152,6 +158,7 @@ public class DatabaseDAO {
         }
     }
 
+    // Returns object PK by logical name, or null if missing.
     private Integer getObjectId(Connection conn, String name) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT objektaID FROM objekts WHERE nosaukums = ?")) {
             ps.setString(1, name);
@@ -162,6 +169,7 @@ public class DatabaseDAO {
         return null;
     }
 
+    // Returns attribute PK by logical name, or null if missing.
     private Integer getAttributeId(Connection conn, String name) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement("SELECT atributaID FROM atributs WHERE nosaukums = ?")) {
             ps.setString(1, name);
@@ -172,6 +180,7 @@ public class DatabaseDAO {
         return null;
     }
 
+    // Lists all attribute definitions (name -> weight).
     public Map<String, Double> listAttributes() throws SQLException {
         Map<String, Double> out = new HashMap<>();
         try (Connection conn = db.getConnection();
@@ -182,6 +191,7 @@ public class DatabaseDAO {
         return out;
     }
 
+    // Returns all objects with their assigned attributes.
     public Map<String, Item> getAllItems() throws SQLException {
         Map<String, Item> out = new HashMap<>();
         try (Connection conn = db.getConnection();
@@ -206,6 +216,7 @@ public class DatabaseDAO {
         return out;
     }
 
+    // Returns a single object with attributes, or null when not found.
     public Item getItem(String name) throws SQLException {
         try (Connection conn = db.getConnection()) {
             Integer id = getObjectId(conn, name);
