@@ -23,10 +23,12 @@ public class Database {
 
     /**
      * Initialize database schema according to provided diagram:
-     * - atributs
+     * - atributs (with rule)
      * - lietotajs
      * - objekts
-     * - objekta_vertiba
+     * - objekta_vertiba (with value)
+     * - history
+     * - system_stats
      */
     public void init() throws SQLException {
     try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
@@ -40,12 +42,13 @@ public class Database {
             // data remains intact across restarts. Schema migrations should be handled
             // separately when needed.
 
-            // ATRIBUTS
+            // ATRIBUTS (updated with rule)
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS atributs (" +
                 "atributaID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "nosaukums TEXT NOT NULL, " +
-                "koeficients REAL NOT NULL CHECK(koeficients >= 0 AND koeficients <= 1)" +
+                "nosaukums TEXT NOT NULL UNIQUE, " +
+                "koeficients REAL NOT NULL CHECK(koeficients >= 0 AND koeficients <= 1), " +
+                "rule TEXT NOT NULL DEFAULT 'ASC' CHECK(rule IN ('ASC', 'DESC'))" +
                 ")"
             );
 
@@ -55,31 +58,73 @@ public class Database {
                 "lietotajaID INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "lietotajvards TEXT NOT NULL UNIQUE, " +
                 "parole TEXT NOT NULL, " +
-                "loma TEXT NOT NULL" +
+                "loma TEXT NOT NULL CHECK(loma IN ('Client', 'Admin', 'Worker'))" +
                 ")"
+            );
+
+            // Insert default users if not exist
+            stmt.executeUpdate(
+                "INSERT OR IGNORE INTO lietotajs(lietotajvards, parole, loma) VALUES('admin', 'admin', 'Admin')"
+            );
+            stmt.executeUpdate(
+                "INSERT OR IGNORE INTO lietotajs(lietotajvards, parole, loma) VALUES('worker', 'worker', 'Worker')"
+            );
+            stmt.executeUpdate(
+                "INSERT OR IGNORE INTO lietotajs(lietotajvards, parole, loma) VALUES('client', 'client', 'Client')"
             );
 
             // OBJEKTS
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS objekts (" +
                 "objektaID INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "nosaukums TEXT NOT NULL, " +
+                "nosaukums TEXT NOT NULL UNIQUE, " +
                 "pievienots_laiks TEXT DEFAULT CURRENT_TIMESTAMP, " +
                 "prioritates_svars REAL, " +
-                "statuss TEXT, " +
+                "statuss TEXT DEFAULT 'pending', " +
                 "FK_lietotajsID INTEGER, " +
                 "FOREIGN KEY(FK_lietotajsID) REFERENCES lietotajs(lietotajaID) ON DELETE SET NULL" +
                 ")"
             );
 
-            // OBJEKTA_VERTIBA (presence-only mapping: FK_objektaID <-> FK_atributaID)
+            // OBJEKTA_VERTIBA (with value)
             stmt.executeUpdate(
                 "CREATE TABLE IF NOT EXISTS objekta_vertiba (" +
                 "vertibasID INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "FK_objektaID INTEGER NOT NULL, " +
                 "FK_atributaID INTEGER NOT NULL, " +
+                "vertiba REAL NOT NULL CHECK(vertiba >= 0 AND vertiba <= 1), " +
                 "FOREIGN KEY(FK_objektaID) REFERENCES objekts(objektaID) ON DELETE CASCADE, " +
-                "FOREIGN KEY(FK_atributaID) REFERENCES atributs(atributaID) ON DELETE CASCADE" +
+                "FOREIGN KEY(FK_atributaID) REFERENCES atributs(atributaID) ON DELETE CASCADE, " +
+                "UNIQUE(FK_objektaID, FK_atributaID)" +
+                ")"
+            );
+
+            // HISTORY
+            stmt.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS history (" +
+                "historyID INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "objekta_nosaukums TEXT NOT NULL, " +
+                "processed_time TEXT DEFAULT CURRENT_TIMESTAMP, " +
+                "processed_by TEXT" +
+                ")"
+            );
+
+            // SYSTEM_STATS
+            stmt.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS system_stats (" +
+                "statID INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "uptime REAL, " +
+                "avg_reorder_time REAL, " +
+                "last_updated TEXT DEFAULT CURRENT_TIMESTAMP" +
+                ")"
+            );
+
+            // LAST_PROCESSED (for last 10)
+            stmt.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS last_processed (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "objekta_nosaukums TEXT NOT NULL, " +
+                "processed_time TEXT DEFAULT CURRENT_TIMESTAMP" +
                 ")"
             );
 
@@ -89,6 +134,9 @@ public class Database {
             );
             stmt.executeUpdate(
                 "CREATE INDEX IF NOT EXISTS idx_objekta_vertiba_atributs ON objekta_vertiba(FK_atributaID)"
+            );
+            stmt.executeUpdate(
+                "CREATE INDEX IF NOT EXISTS idx_history_time ON history(processed_time)"
             );
 
             conn.commit();

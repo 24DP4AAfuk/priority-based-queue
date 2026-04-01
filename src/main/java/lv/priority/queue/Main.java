@@ -5,23 +5,23 @@ public class Main {
         Queue queue = new Queue();
         if (args.length > 0 && "demo".equalsIgnoreCase(args[0])) {
             // simple demo
-            queue.setImportance("experience", 0.7);
-            queue.setImportance("communication", 0.3);
+            queue.setAttribute(new Attribute("experience", 0.7, "ASC"));
+            queue.setAttribute(new Attribute("communication", 0.3, "ASC"));
 
             Item alice = new Item("Alice");
-            // presence-only attributes
-            alice.setAttribute("experience");
-            alice.setAttribute("communication");
+            // attributes with values
+            alice.setAttribute("experience", 0.8);
+            alice.setAttribute("communication", 0.9);
 
             Item bob = new Item("Bob");
-            bob.setAttribute("communication");
+            bob.setAttribute("communication", 0.6);
 
             queue.addItem(alice);
             queue.addItem(bob);
 
             System.out.println("Demo ordering:");
             for (Item it : queue.orderedSnapshot()) {
-                System.out.println(it.getName() + " -> " + it.computeScore(queue.getImportanceWeights()));
+                System.out.println(it.getName() + " -> " + it.computeScore(queue.getAttributes()));
             }
             return;
         }

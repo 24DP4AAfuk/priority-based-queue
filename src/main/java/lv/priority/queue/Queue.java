@@ -8,8 +8,8 @@ import java.util.PriorityQueue;
 import java.util.Comparator;
 
 public class Queue {
-    // attribute name -> importance weight (0.0 - 1.0)
-    private Map<String, Double> importanceWeights = new HashMap<>();
+    // attribute name -> Attribute object
+    private Map<String, Attribute> attributes = new HashMap<>();
 
     // map of items for quick lookup
     private Map<String, Item> itemsByName = new HashMap<>();
@@ -36,22 +36,20 @@ public class Queue {
     public Queue() {
     }
 
-    public void setImportance(String attribute, double weight) {
-        if (weight < 0.0) weight = 0.0;
-        if (weight > 1.0) weight = 1.0;
-        importanceWeights.put(attribute, weight);
+    public void setAttribute(Attribute attr) {
+        attributes.put(attr.getName(), attr);
         rebuildQueue();
     }
 
-    public void setImportances(Map<String, Double> weights) {
-        importanceWeights.clear();
-        importanceWeights.putAll(weights);
+    public void setAttributes(Map<String, Attribute> attrs) {
+        attributes.clear();
+        attributes.putAll(attrs);
         rebuildQueue();
     }
 
     public void addItem(Item item) {
         itemsByName.put(item.getName(), item);
-        pq.add(new ItemWrapper(item, item.computeScore(importanceWeights)));
+        pq.add(new ItemWrapper(item, item.computeScore(attributes)));
     }
 
     public Item poll() {
@@ -75,19 +73,19 @@ public class Queue {
         if (it != null) rebuildQueue();
     }
 
-    public void updateItemAttribute(String itemName, String attribute) {
+    public void updateItemAttribute(String itemName, String attribute, double value) {
         Item it = itemsByName.get(itemName);
         if (it != null) {
-            it.setAttribute(attribute);
+            it.setAttribute(attribute, value);
             rebuildQueue();
         }
     }
 
-    // Rebuild the priority queue from current items and importance weights
+    // Rebuild the priority queue from current items and attributes
     private void rebuildQueue() {
         pq.clear();
         for (Item item : itemsByName.values()) {
-            pq.add(new ItemWrapper(item, item.computeScore(importanceWeights)));
+            pq.add(new ItemWrapper(item, item.computeScore(attributes)));
         }
     }
 
@@ -100,15 +98,15 @@ public class Queue {
         return out;
     }
 
-    // Expose a copy of current importance weights
-    public Map<String, Double> getImportanceWeights() {
-        return new HashMap<>(importanceWeights);
+    // Expose a copy of current attributes
+    public Map<String, Attribute> getAttributes() {
+        return new HashMap<>(attributes);
     }
 
     // Compute score for a named item (or NaN if not present)
     public double getScoreForItem(String name) {
         Item it = itemsByName.get(name);
         if (it == null) return Double.NaN;
-        return it.computeScore(importanceWeights);
+        return it.computeScore(attributes);
     }
 }

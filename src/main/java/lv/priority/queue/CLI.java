@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.time.Instant;
 
 // Interactive command-line shell for queue and DB operations.
 public class CLI {
@@ -15,6 +16,10 @@ public class CLI {
     private final Scanner in = new Scanner(System.in);
     private final Database database;
     private final DatabaseDAO dao;
+    private String currentUser;
+    private String currentRole;
+    private long startTime = System.currentTimeMillis();
+    private double avgReorderTime = 0.0;
 
     public CLI(Queue queue) {
         this.queue = queue;
@@ -31,7 +36,11 @@ public class CLI {
 
     // Reads and executes commands until user exits.
     public void run() {
-        System.out.println("Priority Queue CLI. Type 'help' for commands.");
+        if (!authenticate()) {
+            System.out.println("Authentication failed. Exiting.");
+            return;
+        }
+        System.out.println("Priority Queue CLI. Logged in as " + currentUser + " (" + currentRole + "). Type 'help' for commands.");
         while (true) {
             System.out.print("> ");
             String line;
@@ -56,6 +65,10 @@ public class CLI {
                         System.out.println("Bye");
                         return;
                     case "adduser":
+                        if (!"Admin".equals(currentRole)) {
+                            System.out.println("Access denied. Admin required.");
+                            break;
+                        }
                         // adduser <name>
                         if (parts.length < 2) {
                             System.out.println("Usage: adduser <name>");
@@ -73,54 +86,77 @@ public class CLI {
                         }
                         break;
                     case "setattr":
-                        // setattr <name> <attr>
-                        if (parts.length < 3) {
-                            System.out.println("Usage: setattr <name> <attr>");
+                        // setattr <name> <attr> <value>
+                        if (parts.length < 4) {
+                            System.out.println("Usage: setattr <name> <attr> <value>");
                             break;
                         }
                         {
                             String name = parts[1];
                             String attr = parts[2];
-                            queue.updateItemAttribute(name, attr);
+                            double val = Double.parseDouble(parts[3]);
+                            if (val < 0 || val > 1) {
+                                System.out.println("Value must be between 0 and 1");
+                                break;
+                            }
+                            long start = System.nanoTime();
+                            queue.updateItemAttribute(name, attr, val);
+                            long end = System.nanoTime();
+                            avgReorderTime = (avgReorderTime + (end - start) / 1e6) / 2; // average in ms
                             try {
-                                dao.saveAttribute(name, attr);
+                                dao.saveAttribute(name, attr, val);
+                                dao.updateStats((System.currentTimeMillis() - startTime) / 1000.0, avgReorderTime);
                             } catch (SQLException ex) {
                                 System.out.println("DB error: " + ex.getMessage());
                             }
-                            System.out.println("Assigned attribute '" + attr + "' to " + name);
+                            System.out.println("Assigned attribute '" + attr + "' = " + val + " to " + name);
                         }
                         break;
                     case "setimp":
-                        // setimp <attr> <weight>
-                        if (parts.length < 3) {
-                            System.out.println("Usage: setimp <attr> <weight>");
+                        if (!"Admin".equals(currentRole)) {
+                            System.out.println("Access denied. Admin required.");
+                            break;
+                        }
+                        // setimp <attr> <weight> <rule>
+                        if (parts.length < 4) {
+                            System.out.println("Usage: setimp <attr> <weight> <rule>");
                             break;
                         }
                         {
                             String attr = parts[1];
                             double w = Double.parseDouble(parts[2]);
-                            queue.setImportance(attr, w);
+                            String rule = parts[3].toUpperCase();
+                            if (!"ASC".equals(rule) && !"DESC".equals(rule)) {
+                                System.out.println("Rule must be ASC or DESC");
+                                break;
+                            }
+                            queue.setAttribute(new Attribute(attr, w, rule));
                             try {
-                                dao.setImportance(attr, w);
+                                dao.setAttribute(attr, w, rule);
                             } catch (SQLException ex) {
                                 System.out.println("DB error: " + ex.getMessage());
                             }
-                            System.out.println("Set importance '" + attr + "' = " + w);
+                            System.out.println("Set attribute '" + attr + "' weight=" + w + " rule=" + rule);
                         }
                         break;
                     case "createattr":
-                        // createattr <name> <coef>
-                        if (parts.length < 3) {
-                            System.out.println("Usage: createattr <name> <coef>");
+                        if (!"Admin".equals(currentRole)) {
+                            System.out.println("Access denied. Admin required.");
+                            break;
+                        }
+                        // createattr <name> <coef> <rule>
+                        if (parts.length < 4) {
+                            System.out.println("Usage: createattr <name> <coef> <rule>");
                             break;
                         }
                         {
                             String attr = parts[1];
                             double w = Double.parseDouble(parts[2]);
+                            String rule = parts[3].toUpperCase();
                             try {
-                                dao.setImportance(attr, w);
-                                queue.setImportance(attr, w);
-                                System.out.println("Created/updated attribute: " + attr + "=" + w);
+                                dao.setAttribute(attr, w, rule);
+                                queue.setAttribute(new Attribute(attr, w, rule));
+                                System.out.println("Created/updated attribute: " + attr + "=" + w + " " + rule);
                             } catch (SQLException ex) {
                                 System.out.println("DB error: " + ex.getMessage());
                             }
@@ -128,10 +164,11 @@ public class CLI {
                         break;
                     case "listattrs":
                         try {
-                            Map<String, Double> attrs = dao.listAttributes();
-                            System.out.println("Attributes (name = coefficient):");
-                            for (Map.Entry<String, Double> e : attrs.entrySet()) {
-                                System.out.printf("- %s = %.4f\n", e.getKey(), e.getValue());
+                            Map<String, Attribute> attrs = dao.listAttributes();
+                            System.out.println("Attributes (name = coefficient rule):");
+                            for (Map.Entry<String, Attribute> e : attrs.entrySet()) {
+                                Attribute a = e.getValue();
+                                System.out.printf("- %s = %.4f %s\n", e.getKey(), a.getWeight(), a.getRule());
                             }
                         } catch (SQLException ex) {
                             System.out.println("DB error: " + ex.getMessage());
@@ -140,22 +177,23 @@ public class CLI {
                     case "list":
                         // list current ordering - fetch fresh from DB
                         try {
-                            Map<String, Double> imps = dao.listAttributes();
+                            Map<String, Attribute> imps = dao.listAttributes();
                             Map<String, Item> items = dao.getAllItems();
                             List<Item> ordered = new ArrayList<>(items.values());
                             ordered.sort((a, b) -> Double.compare(b.computeScore(imps), a.computeScore(imps)));
 
-                            System.out.println("Current ordering (highest score first):");
-                            System.out.printf("%-20s %-10s %s\n", "Name", "Score", "Attributes");
-                            System.out.println("---------------------------------------------------------------");
+                            System.out.println("CURRENT PRIORITY QUEUE");
+                            System.out.println("Position | Name          | Score     | Attributes");
+                            System.out.println("---------|---------------|-----------|-----------");
+                            int pos = 1;
                             for (Item it : ordered) {
                                 double s = it.computeScore(imps);
                                 StringBuilder as = new StringBuilder();
-                                for (String a : it.getAttributes()) {
+                                for (Map.Entry<String, Double> entry : it.getAttributes().entrySet()) {
                                     if (as.length() > 0) as.append(", ");
-                                    as.append(a);
+                                    as.append(entry.getKey()).append("=").append(String.format("%.2f", entry.getValue()));
                                 }
-                                System.out.printf("%-20s %-10.4f %s\n", it.getName(), s, as.toString());
+                                System.out.printf("%-8d | %-13s | %-9.4f | %s\n", pos++, it.getName(), s, as.toString());
                             }
                         } catch (SQLException ex) {
                             System.out.println("DB error: " + ex.getMessage());
@@ -170,7 +208,7 @@ public class CLI {
                         {
                             String name = parts[1];
                             try {
-                                Map<String, Double> imps = dao.listAttributes();
+                                Map<String, Attribute> imps = dao.listAttributes();
                                 Item it = dao.getItem(name);
                                 if (it == null) {
                                     System.out.println("No such item: " + name);
@@ -182,8 +220,8 @@ public class CLI {
                                     if (it.getAttributes().isEmpty()) {
                                         System.out.println("  (none)");
                                     } else {
-                                        for (String a : it.getAttributes()) {
-                                            System.out.printf("  - %s\n", a);
+                                        for (Map.Entry<String, Double> entry : it.getAttributes().entrySet()) {
+                                            System.out.printf("  - %s = %.2f\n", entry.getKey(), entry.getValue());
                                         }
                                     }
                                 }
@@ -193,6 +231,10 @@ public class CLI {
                         }
                         break;
                     case "remove":
+                        if (!"Admin".equals(currentRole)) {
+                            System.out.println("Access denied. Admin required.");
+                            break;
+                        }
                         // remove <name>
                         if (parts.length < 2) {
                             System.out.println("Usage: remove <name>");
@@ -210,23 +252,71 @@ public class CLI {
                         }
                         break;
                     case "poll":
+                        if (!"Worker".equals(currentRole)) {
+                            System.out.println("Access denied. Worker required.");
+                            break;
+                        }
                         Item p = queue.poll();
                         if (p == null) {
                             System.out.println("Queue empty");
                         } else {
-                            System.out.println("Polled: " + p.getName());
+                            System.out.println("Processing item: " + p.getName());
                             try {
                                 dao.removeItem(p.getName());
+                                dao.addToHistory(p.getName(), currentUser);
+                                dao.updateStats((System.currentTimeMillis() - startTime) / 1000.0, avgReorderTime);
                             } catch (SQLException ex) {
                                 System.out.println("DB error: " + ex.getMessage());
                             }
                         }
                         break;
-                    case "imp":
-                        // show importances
-                        System.out.println("Importance weights:");
-                        for (Map.Entry<String, Double> e : queue.getImportanceWeights().entrySet()) {
-                            System.out.printf("- %s = %.4f\n", e.getKey(), e.getValue());
+                    case "search":
+                        // search <query>
+                        if (parts.length < 2) {
+                            System.out.println("Usage: search <query>");
+                            break;
+                        }
+                        {
+                            String query = parts[1];
+                            try {
+                                List<String> results = dao.searchItems(query);
+                                if (results.isEmpty()) {
+                                    System.out.println("No items found");
+                                } else {
+                                    System.out.println("Search results:");
+                                    for (String r : results) {
+                                        System.out.println("  " + r);
+                                    }
+                                }
+                            } catch (SQLException ex) {
+                                System.out.println("DB error: " + ex.getMessage());
+                            }
+                        }
+                        break;
+                    case "history":
+                        try {
+                            List<String> hist = dao.getHistory();
+                            System.out.println("Processing History:");
+                            for (String h : hist) {
+                                System.out.println("  " + h);
+                            }
+                        } catch (SQLException ex) {
+                            System.out.println("DB error: " + ex.getMessage());
+                        }
+                        break;
+                    case "stats":
+                        try {
+                            double[] stats = dao.getStats();
+                            List<String> last = dao.getLastProcessed();
+                            System.out.println("System Statistics:");
+                            System.out.printf("Uptime: %.2f seconds\n", stats[0]);
+                            System.out.printf("Average reordering time: %.2f ms\n", stats[1]);
+                            System.out.println("Last 10 processed items:");
+                            for (String l : last) {
+                                System.out.println("  " + l);
+                            }
+                        } catch (SQLException ex) {
+                            System.out.println("DB error: " + ex.getMessage());
                         }
                         break;
                     default:
@@ -238,19 +328,39 @@ public class CLI {
         }
     }
 
+    private boolean authenticate() {
+        System.out.println("Priority Queue System Login");
+        System.out.print("Username: ");
+        String username = in.nextLine().trim();
+        System.out.print("Password: ");
+        String password = in.nextLine().trim();
+        try {
+            currentRole = dao.authenticate(username, password);
+            if (currentRole != null) {
+                currentUser = username;
+                return true;
+            }
+        } catch (SQLException e) {
+            System.out.println("DB error: " + e.getMessage());
+        }
+        return false;
+    }
+
     private void printHelp() {
         System.out.println("Commands:");
         System.out.println("  help                Show this help");
-        System.out.println("  adduser <name>      Add a user/item");
-        System.out.println("  setattr <name> <attr>        Assign attribute to item (presence-only)");
-        System.out.println("  setimp <attr> <weight>           Set importance weight (0.0-1.0)");
-        System.out.println("  createattr <name> <coef>        Create/update attribute definition");
-        System.out.println("  listattrs                         List defined attributes and coefficients");
+        System.out.println("  adduser <name>      Add a new item/user (Admin)");
+        System.out.println("  setattr <name> <attr> <value>  Assign attribute value to item");
+        System.out.println("  setimp <attr> <weight> <rule>  Set attribute importance and rule (Admin)");
+        System.out.println("  createattr <name> <coef> <rule> Create/update attribute definition (Admin)");
+        System.out.println("  listattrs           List defined attributes and rules");
         System.out.println("  list                List items ordered by score");
         System.out.println("  show <name>         Show item details and score");
-        System.out.println("  remove <name>       Remove an item");
-        System.out.println("  poll                Pop highest-priority item");
-        System.out.println("  imp                 Show importance weights");
+        System.out.println("  remove <name>       Remove an item (Admin)");
+        System.out.println("  poll                Process highest-priority item (Worker)");
+        System.out.println("  search <query>      Search items by ID or name");
+        System.out.println("  history             Show processing history");
+        System.out.println("  stats               Show system statistics");
         System.out.println("  exit                Quit");
     }
 }

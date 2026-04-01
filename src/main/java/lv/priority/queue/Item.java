@@ -1,50 +1,62 @@
 package lv.priority.queue;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class Item {
     private String name;
-    private Set<String> attributes; // attribute presence set
+    private Map<String, Double> attributes; // attribute name -> value
 
     public Item(String name) {
         this.name = name;
-        this.attributes = new HashSet<>();
+        this.attributes = new HashMap<>();
     }
 
-    public Item(String name, Set<String> attributes) {
+    public Item(String name, Map<String, Double> attributes) {
         this.name = name;
-        this.attributes = new HashSet<>(attributes);
+        this.attributes = new HashMap<>(attributes);
     }
 
     public String getName() {
         return name;
     }
 
-    public Set<String> getAttributes() {
+    public Map<String, Double> getAttributes() {
         return attributes;
     }
 
-    public void setAttribute(String attrName) {
-        attributes.add(attrName);
+    public void setAttribute(String attrName, double value) {
+        attributes.put(attrName, value);
     }
 
     public boolean hasAttribute(String attrName) {
-        return attributes.contains(attrName);
+        return attributes.containsKey(attrName);
     }
 
-    // Compute a combined score given attribute importance weights.
-    // If an importance weight for an attribute is not provided, treat it as 1.0
-    // so attribute values still contribute by default.
-    public double computeScore(Map<String, Double> importanceWeights) {
+    public double getAttributeValue(String attrName) {
+        return attributes.getOrDefault(attrName, 0.0);
+    }
+
+    // Compute a combined score given attribute importance weights and rules.
+    // For each attribute, score contribution depends on rule: ASC (higher value better), DESC (lower value better)
+    public double computeScore(Map<String, Attribute> attributeDefs) {
         double score = 0.0;
-        for (String attr : attributes) {
-            double weight = 1.0;
-            if (importanceWeights != null) {
-                weight = importanceWeights.getOrDefault(attr, 1.0);
+        for (Map.Entry<String, Double> entry : attributes.entrySet()) {
+            String attr = entry.getKey();
+            double value = entry.getValue();
+            Attribute def = attributeDefs.get(attr);
+            if (def != null) {
+                double weight = def.getWeight();
+                if ("DESC".equals(def.getRule())) {
+                    // For DESC, invert the value (assuming values are 0-1, lower is better)
+                    value = 1.0 - value;
+                }
+                score += value * weight;
+            } else {
+                // Default: ASC with weight 1.0
+                score += value * 1.0;
             }
-            score += weight; // presence contributes weight (binary)
         }
         return score;
     }
