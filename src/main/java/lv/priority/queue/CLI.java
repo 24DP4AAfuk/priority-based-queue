@@ -45,6 +45,7 @@ public class CLI {
             System.out.print("> ");
             String line;
             try {
+                // Read one command line from stdin.
                 line = in.nextLine();
             } catch (Exception e) {
                 System.out.println("Goodbye");
@@ -53,6 +54,7 @@ public class CLI {
             if (line == null) return;
             line = line.trim();
             if (line.isEmpty()) continue;
+            // First token is command name, remaining tokens are arguments.
             String[] parts = line.split("\\s+");
             String cmd = parts[0].toLowerCase();
             try {
@@ -177,6 +179,7 @@ public class CLI {
                     case "list":
                         // list current ordering - fetch fresh from DB
                         try {
+                            // Pull persisted scores so output reflects DB source of truth.
                             Map<String, Attribute> imps = dao.listAttributes();
                             Map<String, Item> items = dao.getAllItems();
                             Map<String, Double> scores = dao.getStoredScores();
@@ -259,6 +262,7 @@ public class CLI {
                             System.out.println("Access denied. Worker required.");
                             break;
                         }
+                        // Poll from in-memory queue; then mirror removal + audit data in DB.
                         Item p = queue.poll();
                         if (p == null) {
                             System.out.println("Queue empty");
@@ -326,12 +330,14 @@ public class CLI {
                         System.out.println("Unknown command: " + cmd + ". Type 'help'.");
                 }
             } catch (Exception e) {
+                // Keep CLI loop alive on bad input (e.g., number parsing errors).
                 System.out.println("Error: " + e.getMessage());
             }
         }
     }
 
     private boolean authenticate() {
+        // Simple username/password login against the lietotajs table.
         System.out.println("Priority Queue System Login");
         System.out.print("Username: ");
         String username = in.nextLine().trim();
@@ -350,6 +356,7 @@ public class CLI {
     }
 
     private void printHelp() {
+        // Keep this output aligned with switch-case command handlers.
         System.out.println("Commands:");
         System.out.println("  help                Show this help");
         System.out.println("  adduser <name>      Add a new item/user (Admin)");

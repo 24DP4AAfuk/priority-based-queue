@@ -1,5 +1,6 @@
 package lv.priority.queue;
 
+// Application entry point that runs either demo mode or interactive CLI.
 public class Main {
     public static void main(String[] args) {
         Queue queue = new Queue();

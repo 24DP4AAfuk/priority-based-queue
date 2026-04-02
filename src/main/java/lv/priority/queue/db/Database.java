@@ -8,6 +8,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
+// SQLite connection + schema lifecycle management.
 public class Database {
     private static final String DEFAULT_URL = "jdbc:sqlite:priority.db";
     private final String url;
@@ -184,6 +185,7 @@ public class Database {
         }
     }
 
+    // Finds candidate legacy columns that may store attribute values in older DB versions.
     private List<String> findLegacyValueColumns(Connection conn) throws SQLException {
         List<String> candidates = new ArrayList<>();
         try (Statement stmt = conn.createStatement();
@@ -218,6 +220,7 @@ public class Database {
         return candidates;
     }
 
+    // Recomputes stored object scores based on current rules/weights and saved values.
     private void recomputeAllPriorities(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             stmt.executeUpdate(
@@ -229,6 +232,7 @@ public class Database {
         }
     }
 
+    // Checks whether a specific column exists in a table using PRAGMA metadata.
     private boolean hasColumn(Connection conn, String tableName, String columnName) throws SQLException {
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + tableName + ")")) {

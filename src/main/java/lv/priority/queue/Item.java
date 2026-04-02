@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+// Represents one queue entity and its assigned attribute values.
 public class Item {
     private String name;
     private Map<String, Double> attributes; // attribute name -> value
@@ -62,6 +63,7 @@ public class Item {
     }
 
     @Override
+    // Helpful for debugging and logs.
     public String toString() {
         return "Item{name='" + name + "', attributes=" + attributes + "}";
     }
