@@ -64,18 +64,20 @@ Default users:
 ### Prerequisites ✅
 
 - JDK 21+
-- Maven 3.8+
+- Maven 3.8+ or the bundled Maven Wrapper (`./mvnw` on macOS/Linux, `mvnw.cmd` on Windows)
 
 ### Build 🛠️
 
 ```bash
-mvn clean compile
+./mvnw clean package
 ```
+
+This creates an executable shaded jar in `target/` that includes the SQLite JDBC driver.
 
 ### Run CLI 💬
 
 ```bash
-mvn exec:java
+java -jar target/priority-based-queue-0.1.0.jar
 ```
 
 Login with username/password.
@@ -83,8 +85,10 @@ Login with username/password.
 ### Run Demo Mode 🎬
 
 ```bash
-mvn exec:java -Dexec.args="demo"
+java -jar target/priority-based-queue-0.1.0.jar demo
 ```
+
+If you prefer to run from Maven directly, you can still use `./mvnw exec:java` or `./mvnw exec:java -Dexec.args="demo"`.
 
 ## CLI Commands ⌨️
 
@@ -117,6 +121,8 @@ mvn exec:java -Dexec.args="demo"
 ## Notes 📝
 
 - `.gitignore` already excludes database files (`*.db`) and explicitly includes `priority.db`.
+- The Maven Wrapper is included, so the project can be built without a locally installed Maven.
+- `target/priority-based-queue-0.1.0.jar` is the runnable shaded jar produced by `./mvnw clean package`.
 - `target/` contains build output and should not be committed.
 - Attributes have values 0.0-1.0 and ASC/DESC rules for flexible priority calculation.
 - Authentication ensures role-based access control.
