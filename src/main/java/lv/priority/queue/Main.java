@@ -17,9 +17,9 @@ public class Main {
     }
 
     private static void runDemo(Queue queue) {
-        System.out.println("============================================");
-        System.out.println(" Priority Queue Demo: Support Ticket Triage ");
-        System.out.println("============================================");
+        System.out.println(Ansi.info("============================================"));
+        System.out.println(Ansi.bold(Ansi.accent(" Priority Queue Demo: Support Ticket Triage ")));
+        System.out.println(Ansi.info("============================================"));
 
         queue.setAttribute(new Attribute("urgency", 0.50, "ASC"));
         queue.setAttribute(new Attribute("impact", 0.30, "ASC"));
@@ -57,9 +57,9 @@ public class Main {
 
     private static void printRules(Map<String, Attribute> attrs) {
         System.out.println();
-        System.out.println("Scoring Rules");
-        System.out.println("- ASC: higher value increases priority");
-        System.out.println("- DESC: lower value increases priority (uses 1 - value)");
+        System.out.println(Ansi.bold(Ansi.info("Scoring Rules")));
+        System.out.println(Ansi.dim("- ASC: higher value increases priority"));
+        System.out.println(Ansi.dim("- DESC: lower value increases priority (uses 1 - value)"));
         System.out.println();
         System.out.printf(Locale.US, "%-12s | %-6s | %-6s%n", "Attribute", "Weight", "Rule");
         System.out.println("-------------|--------|------");
@@ -73,7 +73,7 @@ public class Main {
         List<Item> ordered = queue.orderedSnapshot();
 
         System.out.println();
-        System.out.println("Initial Queue Ranking (highest score first)");
+        System.out.println(Ansi.bold(Ansi.info("Initial Queue Ranking (highest score first)")));
         System.out.printf(Locale.US, "%-4s | %-20s | %-8s | %-8s | %-9s | %-7s%n",
                 "Pos", "Ticket", "Urgency", "Impact", "WaitTime", "Score");
         System.out.println("-----|----------------------|----------|----------|-----------|--------");
@@ -92,7 +92,7 @@ public class Main {
 
     private static void printProcessingSimulation(Queue queue) {
         System.out.println();
-        System.out.println("Processing Simulation");
+        System.out.println(Ansi.bold(Ansi.info("Processing Simulation")));
         int step = 1;
         Item next;
         while ((next = queue.poll()) != null) {
@@ -101,6 +101,6 @@ public class Main {
                     next.getName(),
                     next.computeScore(queue.getAttributes()));
         }
-        System.out.println("Queue is now empty.");
+        System.out.println(Ansi.success("Queue is now empty."));
     }
 }
