@@ -2,9 +2,13 @@ package lv.priority.queue.db;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
+// SQLite connection + schema lifecycle management.
 public class Database {
     private static final String DEFAULT_URL = "jdbc:sqlite:priority.db";
     private final String url;
@@ -139,12 +143,19 @@ public class Database {
                 "CREATE INDEX IF NOT EXISTS idx_history_time ON history(processed_time)"
             );
 
+            // Migration: old DB versions could store object-attribute value in a different column.
+            // Ensure objekta_vertiba always has the expected 'vertiba' column used by DAO queries.
+            migrateObjektaVertibaTable(conn);
+
             // Migration: Add rule column to atributs if not exists
             try {
                 stmt.executeUpdate("ALTER TABLE atributs ADD COLUMN rule TEXT DEFAULT 'ASC'");
             } catch (SQLException e) {
                 // Ignore if column already exists
             }
+
+            // Keep persisted scores aligned with current attribute values and rules.
+            recomputeAllPriorities(conn);
 
             conn.commit();
         } catch (SQLException e) {
@@ -153,6 +164,86 @@ public class Database {
         }
     }
 }
+
+    private void migrateObjektaVertibaTable(Connection conn) throws SQLException {
+        boolean hasVertiba = hasColumn(conn, "objekta_vertiba", "vertiba");
+        if (!hasVertiba) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate("ALTER TABLE objekta_vertiba ADD COLUMN vertiba REAL");
+            }
+        }
+
+        // Compatibility with older schemas that used a different value column name.
+        List<String> legacyValueColumns = findLegacyValueColumns(conn);
+        for (String legacyColumn : legacyValueColumns) {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate(
+                    "UPDATE objekta_vertiba SET vertiba = " + legacyColumn + " " +
+                    "WHERE (vertiba IS NULL OR vertiba = 0) AND " + legacyColumn + " IS NOT NULL"
+                );
+            }
+        }
+    }
+
+    // Finds candidate legacy columns that may store attribute values in older DB versions.
+    private List<String> findLegacyValueColumns(Connection conn) throws SQLException {
+        List<String> candidates = new ArrayList<>();
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(objekta_vertiba)")) {
+            while (rs.next()) {
+                String name = rs.getString("name");
+                String type = rs.getString("type");
+                if (name == null) {
+                    continue;
+                }
+
+                String normalized = name.toLowerCase();
+                if ("vertiba".equals(normalized)
+                        || "vertibasid".equals(normalized)
+                        || "fk_objektaid".equals(normalized)
+                        || "fk_atributaid".equals(normalized)) {
+                    continue;
+                }
+
+                String normalizedType = type == null ? "" : type.toUpperCase();
+                boolean numeric = normalizedType.contains("REAL")
+                        || normalizedType.contains("NUM")
+                        || normalizedType.contains("DOUB")
+                        || normalizedType.contains("FLOA")
+                        || normalizedType.contains("INT");
+
+                if (numeric && (normalized.contains("vertib") || "value".equals(normalized))) {
+                    candidates.add(name);
+                }
+            }
+        }
+        return candidates;
+    }
+
+    // Recomputes stored object scores based on current rules/weights and saved values.
+    private void recomputeAllPriorities(Connection conn) throws SQLException {
+        try (Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate(
+                "UPDATE objekts SET prioritates_svars = COALESCE((" +
+                "SELECT SUM(CASE WHEN a.rule = 'DESC' THEN (1.0 - ov.vertiba) ELSE ov.vertiba END * a.koeficients) " +
+                "FROM objekta_vertiba ov JOIN atributs a ON a.atributaID = ov.FK_atributaID " +
+                "WHERE ov.FK_objektaID = objekts.objektaID), 0)"
+            );
+        }
+    }
+
+    // Checks whether a specific column exists in a table using PRAGMA metadata.
+    private boolean hasColumn(Connection conn, String tableName, String columnName) throws SQLException {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("PRAGMA table_info(" + tableName + ")")) {
+            while (rs.next()) {
+                if (columnName.equalsIgnoreCase(rs.getString("name"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     // Simple demo to create tables
     public static void main(String[] args) {

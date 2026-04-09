@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Comparator;
 
+// In-memory priority queue that ranks items by computed score.
 public class Queue {
     // attribute name -> Attribute object
     private Map<String, Attribute> attributes = new HashMap<>();
@@ -47,6 +48,7 @@ public class Queue {
         rebuildQueue();
     }
 
+    // Insert or replace an item instance and enqueue it with current score.
     public void addItem(Item item) {
         itemsByName.put(item.getName(), item);
         pq.add(new ItemWrapper(item, item.computeScore(attributes)));
@@ -76,6 +78,7 @@ public class Queue {
     public void updateItemAttribute(String itemName, String attribute, double value) {
         Item it = itemsByName.get(itemName);
         if (it != null) {
+            // Score ordering depends on attribute values, so rebuild after each mutation.
             it.setAttribute(attribute, value);
             rebuildQueue();
         }

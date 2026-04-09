@@ -3,6 +3,12 @@ package lv.priority.queue;
 import lv.priority.queue.db.Database;
 import lv.priority.queue.db.DatabaseDAO;
 
+import java.io.Console;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.List;
@@ -36,14 +42,16 @@ public class CLI {
     // Reads and executes commands until user exits.
     public void run() {
         if (!authenticate()) {
-            System.out.println("Authentication failed. Exiting.");
+            System.out.println(Ansi.error("Authentication failed. Exiting."));
             return;
         }
-        System.out.println("Priority Queue CLI. Logged in as " + currentUser + " (" + currentRole + "). Type 'help' for commands.");
+        System.out.println(Ansi.success("Priority Queue CLI"));
+        System.out.println(Ansi.dim("Logged in as ") + Ansi.info(currentUser) + Ansi.dim(" (") + Ansi.accent(currentRole) + Ansi.dim("). Type 'help' for commands."));
         while (true) {
-            System.out.print("> ");
+            System.out.print(Ansi.info("> "));
             String line;
             try {
+                // Read one command line from stdin.
                 line = in.nextLine();
             } catch (Exception e) {
                 System.out.println("Goodbye");
@@ -52,6 +60,7 @@ public class CLI {
             if (line == null) return;
             line = line.trim();
             if (line.isEmpty()) continue;
+            // First token is command name, remaining tokens are arguments.
             String[] parts = line.split("\\s+");
             String cmd = parts[0].toLowerCase();
             try {
@@ -61,11 +70,11 @@ public class CLI {
                         break;
                     case "exit":
                     case "quit":
-                        System.out.println("Bye");
+                        System.out.println(Ansi.success("Bye"));
                         return;
                     case "adduser":
                         if (!"Admin".equals(currentRole)) {
-                            System.out.println("Access denied. Admin required.");
+                            System.out.println(Ansi.error("Access denied. Admin required."));
                             break;
                         }
                         // adduser <name>
@@ -78,10 +87,10 @@ public class CLI {
                             try {
                                 dao.addItem(name);
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
                             queue.addItem(new Item(name));
-                            System.out.println("Added user: " + name);
+                            System.out.println(Ansi.success("Added user: ") + Ansi.info(name));
                         }
                         break;
                     case "setattr":
@@ -106,14 +115,14 @@ public class CLI {
                                 dao.saveAttribute(name, attr, val);
                                 dao.updateStats((System.currentTimeMillis() - startTime) / 1000.0, avgReorderTime);
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
-                            System.out.println("Assigned attribute '" + attr + "' = " + val + " to " + name);
+                            System.out.println(Ansi.success("Assigned attribute ") + Ansi.accent("'" + attr + "'") + Ansi.success(" = ") + Ansi.info(String.valueOf(val)) + Ansi.success(" to ") + Ansi.info(name));
                         }
                         break;
                     case "setimp":
                         if (!"Admin".equals(currentRole)) {
-                            System.out.println("Access denied. Admin required.");
+                            System.out.println(Ansi.error("Access denied. Admin required."));
                             break;
                         }
                         // setimp <attr> <weight> <rule>
@@ -133,14 +142,14 @@ public class CLI {
                             try {
                                 dao.setAttribute(attr, w, rule);
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
-                            System.out.println("Set attribute '" + attr + "' weight=" + w + " rule=" + rule);
+                            System.out.println(Ansi.success("Set attribute ") + Ansi.accent("'" + attr + "'") + Ansi.success(" weight=") + Ansi.info(String.valueOf(w)) + Ansi.success(" rule=") + Ansi.info(rule));
                         }
                         break;
                     case "createattr":
                         if (!"Admin".equals(currentRole)) {
-                            System.out.println("Access denied. Admin required.");
+                            System.out.println(Ansi.error("Access denied. Admin required."));
                             break;
                         }
                         // createattr <name> <coef> <rule>
@@ -155,47 +164,55 @@ public class CLI {
                             try {
                                 dao.setAttribute(attr, w, rule);
                                 queue.setAttribute(new Attribute(attr, w, rule));
-                                System.out.println("Created/updated attribute: " + attr + "=" + w + " " + rule);
+                                System.out.println(Ansi.success("Created/updated attribute: ") + Ansi.info(attr) + Ansi.success("=") + Ansi.info(String.valueOf(w)) + Ansi.success(" ") + Ansi.info(rule));
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
                         }
                         break;
                     case "listattrs":
                         try {
                             Map<String, Attribute> attrs = dao.listAttributes();
-                            System.out.println("Attributes (name = coefficient rule):");
+                            System.out.println(Ansi.bold(Ansi.info("Attributes (name = coefficient rule):")));
                             for (Map.Entry<String, Attribute> e : attrs.entrySet()) {
                                 Attribute a = e.getValue();
-                                System.out.printf("- %s = %.4f %s\n", e.getKey(), a.getWeight(), a.getRule());
+                                System.out.printf("%s %s = %.4f %s%n",
+                                        Ansi.dim("-"),
+                                        Ansi.info(e.getKey()),
+                                        a.getWeight(),
+                                        Ansi.accent(a.getRule()));
                             }
                         } catch (SQLException ex) {
-                            System.out.println("DB error: " + ex.getMessage());
+                            System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                         }
                         break;
                     case "list":
                         // list current ordering - fetch fresh from DB
                         try {
+                            // Pull persisted scores so output reflects DB source of truth.
                             Map<String, Attribute> imps = dao.listAttributes();
                             Map<String, Item> items = dao.getAllItems();
+                            Map<String, Double> scores = dao.getStoredScores();
                             List<Item> ordered = new ArrayList<>(items.values());
-                            ordered.sort((a, b) -> Double.compare(b.computeScore(imps), a.computeScore(imps)));
+                            ordered.sort((a, b) -> Double.compare(
+                                    scores.getOrDefault(b.getName(), b.computeScore(imps)),
+                                    scores.getOrDefault(a.getName(), a.computeScore(imps))));
 
-                            System.out.println("CURRENT PRIORITY QUEUE");
-                            System.out.println("Position | Name          | Score     | Attributes");
-                            System.out.println("---------|---------------|-----------|-----------");
+                            System.out.println(Ansi.bold(Ansi.info("CURRENT PRIORITY QUEUE")));
+                            System.out.println(Ansi.dim("Position | Name          | Score     | Attributes"));
+                            System.out.println(Ansi.dim("---------|---------------|-----------|-----------"));
                             int pos = 1;
                             for (Item it : ordered) {
-                                double s = it.computeScore(imps);
+                                double s = scores.getOrDefault(it.getName(), it.computeScore(imps));
                                 StringBuilder as = new StringBuilder();
                                 for (Map.Entry<String, Double> entry : it.getAttributes().entrySet()) {
                                     if (as.length() > 0) as.append(", ");
                                     as.append(entry.getKey()).append("=").append(String.format("%.2f", entry.getValue()));
                                 }
-                                System.out.printf("%-8d | %-13s | %-9.4f | %s\n", pos++, it.getName(), s, as.toString());
+                                System.out.printf("%-8d | %-13s | %-9.4f | %s%n", pos++, it.getName(), s, as.toString());
                             }
                         } catch (SQLException ex) {
-                            System.out.println("DB error: " + ex.getMessage());
+                            System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                         }
                         break;
                     case "show":
@@ -210,28 +227,28 @@ public class CLI {
                                 Map<String, Attribute> imps = dao.listAttributes();
                                 Item it = dao.getItem(name);
                                 if (it == null) {
-                                    System.out.println("No such item: " + name);
+                                    System.out.println(Ansi.warning("No such item: ") + Ansi.info(name));
                                 } else {
                                     double s = it.computeScore(imps);
-                                    System.out.println("User: " + it.getName());
-                                    System.out.printf("Score: %.4f\n", s);
-                                    System.out.println("Attributes:");
+                                    System.out.println(Ansi.bold(Ansi.info("User: ")) + Ansi.accent(it.getName()));
+                                    System.out.printf("%s %.4f%n", Ansi.bold(Ansi.info("Score:")), s);
+                                    System.out.println(Ansi.bold(Ansi.info("Attributes:")));
                                     if (it.getAttributes().isEmpty()) {
-                                        System.out.println("  (none)");
+                                        System.out.println(Ansi.dim("  (none)"));
                                     } else {
                                         for (Map.Entry<String, Double> entry : it.getAttributes().entrySet()) {
-                                            System.out.printf("  - %s = %.2f\n", entry.getKey(), entry.getValue());
+                                            System.out.printf("  %s %s = %.2f%n", Ansi.dim("-"), Ansi.info(entry.getKey()), entry.getValue());
                                         }
                                     }
                                 }
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
                         }
                         break;
                     case "remove":
                         if (!"Admin".equals(currentRole)) {
-                            System.out.println("Access denied. Admin required.");
+                            System.out.println(Ansi.error("Access denied. Admin required."));
                             break;
                         }
                         // remove <name>
@@ -245,27 +262,28 @@ public class CLI {
                             try {
                                 dao.removeItem(name);
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
-                            System.out.println("Removed " + name);
+                            System.out.println(Ansi.success("Removed ") + Ansi.info(name));
                         }
                         break;
                     case "poll":
                         if (!"Worker".equals(currentRole)) {
-                            System.out.println("Access denied. Worker required.");
+                            System.out.println(Ansi.error("Access denied. Worker required."));
                             break;
                         }
+                        // Poll from in-memory queue; then mirror removal + audit data in DB.
                         Item p = queue.poll();
                         if (p == null) {
-                            System.out.println("Queue empty");
+                            System.out.println(Ansi.warning("Queue empty"));
                         } else {
-                            System.out.println("Processing item: " + p.getName());
+                            System.out.println(Ansi.success("Processing item: ") + Ansi.info(p.getName()));
                             try {
                                 dao.removeItem(p.getName());
                                 dao.addToHistory(p.getName(), currentUser);
                                 dao.updateStats((System.currentTimeMillis() - startTime) / 1000.0, avgReorderTime);
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
                         }
                         break;
@@ -280,59 +298,60 @@ public class CLI {
                             try {
                                 List<String> results = dao.searchItems(query);
                                 if (results.isEmpty()) {
-                                    System.out.println("No items found");
+                                    System.out.println(Ansi.warning("No items found"));
                                 } else {
-                                    System.out.println("Search results:");
+                                    System.out.println(Ansi.bold(Ansi.info("Search results:")));
                                     for (String r : results) {
-                                        System.out.println("  " + r);
+                                        System.out.println("  " + Ansi.info(r));
                                     }
                                 }
                             } catch (SQLException ex) {
-                                System.out.println("DB error: " + ex.getMessage());
+                                System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                             }
                         }
                         break;
                     case "history":
                         try {
                             List<String> hist = dao.getHistory();
-                            System.out.println("Processing History:");
+                            System.out.println(Ansi.bold(Ansi.info("Processing History:")));
                             for (String h : hist) {
-                                System.out.println("  " + h);
+                                System.out.println("  " + Ansi.info(h));
                             }
                         } catch (SQLException ex) {
-                            System.out.println("DB error: " + ex.getMessage());
+                            System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                         }
                         break;
                     case "stats":
                         try {
                             double[] stats = dao.getStats();
                             List<String> last = dao.getLastProcessed();
-                            System.out.println("System Statistics:");
-                            System.out.printf("Uptime: %.2f seconds\n", stats[0]);
-                            System.out.printf("Average reordering time: %.2f ms\n", stats[1]);
-                            System.out.println("Last 10 processed items:");
+                            System.out.println(Ansi.bold(Ansi.info("System Statistics:")));
+                            System.out.printf("%s %.2f seconds%n", Ansi.dim("Uptime:"), stats[0]);
+                            System.out.printf("%s %.2f ms%n", Ansi.dim("Average reordering time:"), stats[1]);
+                            System.out.println(Ansi.bold(Ansi.info("Last 10 processed items:")));
                             for (String l : last) {
-                                System.out.println("  " + l);
+                                System.out.println("  " + Ansi.info(l));
                             }
                         } catch (SQLException ex) {
-                            System.out.println("DB error: " + ex.getMessage());
+                            System.out.println(Ansi.error("DB error: " + ex.getMessage()));
                         }
                         break;
                     default:
-                        System.out.println("Unknown command: " + cmd + ". Type 'help'.");
+                        System.out.println(Ansi.warning("Unknown command: ") + Ansi.info(cmd) + Ansi.warning(". Type 'help'."));
                 }
             } catch (Exception e) {
-                System.out.println("Error: " + e.getMessage());
+                // Keep CLI loop alive on bad input (e.g., number parsing errors).
+                System.out.println(Ansi.error("Error: " + e.getMessage()));
             }
         }
     }
 
     private boolean authenticate() {
-        System.out.println("Priority Queue System Login");
-        System.out.print("Username: ");
+        // Simple username/password login against the lietotajs table.
+        System.out.println(Ansi.bold(Ansi.info("Priority Queue System Login")));
+        System.out.print(Ansi.dim("Username: "));
         String username = in.nextLine().trim();
-        System.out.print("Password: ");
-        String password = in.nextLine().trim();
+        String password = readPassword();
         try {
             currentRole = dao.authenticate(username, password);
             if (currentRole != null) {
@@ -340,26 +359,48 @@ public class CLI {
                 return true;
             }
         } catch (SQLException e) {
-            System.out.println("DB error: " + e.getMessage());
+            System.out.println(Ansi.error("DB error: " + e.getMessage()));
         }
         return false;
     }
 
+    private String readPassword() {
+        Console console = System.console();
+        if (console != null) {
+            char[] password = console.readPassword(Ansi.dim("Password: "));
+            return password == null ? "" : new String(password).trim();
+        }
+
+        try {
+            Terminal terminal = TerminalBuilder.builder().system(true).build();
+            LineReader reader = LineReaderBuilder.builder()
+                    .terminal(terminal)
+                    .build();
+            String password = reader.readLine(Ansi.dim("Password: "), '*');
+            terminal.close();
+            return password == null ? "" : password.trim();
+        } catch (Exception ex) {
+            System.out.print(Ansi.dim("Password: "));
+            return in.nextLine().trim();
+        }
+    }
+
     private void printHelp() {
-        System.out.println("Commands:");
-        System.out.println("  help                Show this help");
-        System.out.println("  adduser <name>      Add a new item/user (Admin)");
-        System.out.println("  setattr <name> <attr> <value>  Assign attribute value to item");
-        System.out.println("  setimp <attr> <weight> <rule>  Set attribute importance and rule (Admin)");
-        System.out.println("  createattr <name> <coef> <rule> Create/update attribute definition (Admin)");
-        System.out.println("  listattrs           List defined attributes and rules");
-        System.out.println("  list                List items ordered by score");
-        System.out.println("  show <name>         Show item details and score");
-        System.out.println("  remove <name>       Remove an item (Admin)");
-        System.out.println("  poll                Process highest-priority item (Worker)");
-        System.out.println("  search <query>      Search items by ID or name");
-        System.out.println("  history             Show processing history");
-        System.out.println("  stats               Show system statistics");
-        System.out.println("  exit                Quit");
+        // Keep this output aligned with switch-case command handlers.
+        System.out.println(Ansi.bold(Ansi.info("Commands:")));
+        System.out.println("  " + Ansi.accent("help") + Ansi.dim("                Show this help"));
+        System.out.println("  " + Ansi.accent("adduser <name>") + Ansi.dim("      Add a new item/user (Admin)"));
+        System.out.println("  " + Ansi.accent("setattr <name> <attr> <value>") + Ansi.dim("  Assign attribute value to item"));
+        System.out.println("  " + Ansi.accent("setimp <attr> <weight> <rule>") + Ansi.dim("  Set attribute importance and rule (Admin)"));
+        System.out.println("  " + Ansi.accent("createattr <name> <coef> <rule>") + Ansi.dim(" Create/update attribute definition (Admin)"));
+        System.out.println("  " + Ansi.accent("listattrs") + Ansi.dim("           List defined attributes and rules"));
+        System.out.println("  " + Ansi.accent("list") + Ansi.dim("                List items ordered by score"));
+        System.out.println("  " + Ansi.accent("show <name>") + Ansi.dim("         Show item details and score"));
+        System.out.println("  " + Ansi.accent("remove <name>") + Ansi.dim("       Remove an item (Admin)"));
+        System.out.println("  " + Ansi.accent("poll") + Ansi.dim("                Process highest-priority item (Worker)"));
+        System.out.println("  " + Ansi.accent("search <query>") + Ansi.dim("      Search items by ID or name"));
+        System.out.println("  " + Ansi.accent("history") + Ansi.dim("             Show processing history"));
+        System.out.println("  " + Ansi.accent("stats") + Ansi.dim("               Show system statistics"));
+        System.out.println("  " + Ansi.accent("exit") + Ansi.dim("                Quit"));
     }
 }

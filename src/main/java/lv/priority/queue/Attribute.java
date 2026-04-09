@@ -1,5 +1,6 @@
 package lv.priority.queue;
 
+// Defines one scoring attribute with weight and ordering rule.
 public class Attribute {
     private String name;
     private double weight; // importance from 0.0 to 1.0
@@ -27,6 +28,7 @@ public class Attribute {
         return rule;
     }
 
+    // Accepts expected values ASC/DESC; caller validation happens in CLI/DAO paths.
     public void setRule(String rule) {
         this.rule = rule;
     }
