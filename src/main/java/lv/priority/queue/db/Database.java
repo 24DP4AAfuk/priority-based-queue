@@ -22,7 +22,7 @@ public class Database {
     }
 
     /**
-     * Initialize database schema according to provided diagram:
+     * Initialize database schema according to diagram:
      * - atributs (with rule)
      * - lietotajs
      * - objekts

@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
 
-// DAO that keeps queue state and SQLite persistence in sync.
+// data access object that keeps queue state and SQLite persistence in sync.
 public class DatabaseDAO {
     private final Database db;
 
